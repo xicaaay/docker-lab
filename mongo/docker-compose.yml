@@ -1,0 +1,38 @@
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: mongodb-local
+    restart: always
+    ports:
+      - "27017:27017" # Puerto estándar de MongoDB expuesto a la máquina host
+      - "8081:8081"   # Puerto expuesto para acceder a la UI de Mongo Express
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+      - MONGO_REPLICA_SET_NAME=${MONGO_REPLICA_SET_NAME:-rs0}
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+      - ./entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: [ "/bin/bash", "/entrypoint.sh" ]
+    command: [ "mongod", "--replSet", "${MONGO_REPLICA_SET_NAME:-rs0}", "--bind_ip_all", "--keyFile", "/data/configdb/mongo-keyfile" ]
+
+  mongo-express:
+    image: mongo-express:1.0.0
+    container_name: mongo-express-local
+    restart: always
+    # Comparte el espacio de nombres de red del servicio 'mongodb'.
+    # Esto permite a Mongo Express conectarse a 'localhost:27017' y heredar la exposición de puertos (8081).
+    network_mode: "service:mongodb"
+    environment:
+      - ME_CONFIG_MONGODB_URL=mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@127.0.0.1:27017/?replicaSet=${MONGO_REPLICA_SET_NAME:-rs0}&authSource=admin
+      - ME_CONFIG_BASICAUTH_USERNAME=${ME_CONFIG_BASICAUTH_USERNAME}
+      - ME_CONFIG_BASICAUTH_PASSWORD=${ME_CONFIG_BASICAUTH_PASSWORD}
+    depends_on:
+      - mongodb
+
+volumes:
+  mongo-data:
+    driver: local
+  mongo-config:
+    driver: local
